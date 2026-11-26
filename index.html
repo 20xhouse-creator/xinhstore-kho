@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="XinhStore Kho" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>XinhStore — Quét Hàng Hoàn</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #f8fafc; padding: 14px 12px 50px; }
+    .hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+    .hdr h1 { font-size: 18px; margin: 0; color: #38bdf8; }
+    .hdr-btns { display: flex; gap: 6px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .stat { background: #1e293b; border-radius: 10px; padding: 10px 8px; text-align: center; border: 1px solid #334155; }
+    .stat .num { font-size: 20px; font-weight: 700; }
+    .stat .lbl { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+    .c-warn { color: #fbbf24; }
+    .c-ok { color: #34d399; }
+    .card { background: #1e293b; border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid #334155; }
+    .row { display: flex; gap: 8px; }
+    input {
+      width: 100%; background: #0f172a; color: #f8fafc; border: 1px solid #475569;
+      border-radius: 8px; padding: 10px 12px; font-size: 15px; outline: none;
+    }
+    input:focus { border-color: #38bdf8; }
+    .btn {
+      border: none; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 600;
+      cursor: pointer; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-blue { background: #2563eb; }
+    .btn-green { background: #059669; }
+    .btn-amber { background: #d97706; }
+    .btn-red { background: #dc2626; }
+    .btn-gray { background: #334155; }
+    .btn-full { width: 100%; }
+    #reader { width: 100%; border-radius: 10px; overflow: hidden; margin-top: 10px; display: none; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .b-ret { background: #7c2d12; color: #fed7aa; }
+    .b-fail { background: #7f1d1d; color: #fecaca; }
+    .b-done { background: #064e3b; color: #a7f3d0; }
+    .item-list { margin: 8px 0; padding-left: 18px; font-size: 14px; line-height: 1.5; color: #e2e8f0; }
+    .toast {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      background: #10b981; color: #052e16; font-weight: 700; padding: 10px 18px;
+      border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.4); display: none; z-index: 999;
+      max-width: 92vw; text-align: center; font-size: 13px;
+    }
+    .recent-item { border-top: 1px solid #334155; padding: 8px 0; font-size: 13px; }
+    .recent-item:first-child { border-top: none; }
+    .muted { color: #94a3b8; font-size: 12px; }
+    #settingsBox { display: none; }
+    #btnInstall { display: none; margin-bottom: 10px; background: linear-gradient(90deg, #0ea5e9, #2563eb); }
+  </style>
+</head>
+<body>
+  <div class="hdr">
+    <h1>📦 XinhStore Kho</h1>
+    <div class="hdr-btns">
+      <button class="btn btn-gray" style="padding:7px 10px;font-size:12px" onclick="toggleSettings()">⚙️ API</button>
+      <button class="btn btn-gray" style="padding:7px 10px;font-size:12px" onclick="refreshStats()">🔄</button>
+    </div>
+  </div>
+
+  <button id="btnInstall" class="btn btn-full" onclick="installPwa()">📲 Cài đặt thành Ứng dụng trên điện thoại</button>
+
+  <div id="settingsBox" class="card" style="border-color:#38bdf8">
+    <div style="font-weight:700;margin-bottom:6px;font-size:14px">⚙️ Cấu hình đường link Google Apps Script (/exec)</div>
+    <div class="muted" style="margin-bottom:8px">Dán đường link Web App <code>https://script.google.com/macros/s/.../exec</code> 1 lần duy nhất, máy sẽ tự nhớ.</div>
+    <input id="inpApiUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:13px;margin-bottom:8px" />
+    <div class="row">
+      <button class="btn btn-green" style="flex:1" onclick="saveApiUrl()">💾 Lưu & Kết nối</button>
+      <button class="btn btn-gray" onclick="toggleSettings()">Đóng</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="num" id="stTotal">-</div><div class="lbl">Tổng đơn hoàn</div></div>
+    <div class="stat"><div class="num c-ok" id="stScanned">-</div><div class="lbl">Đã về kho</div></div>
+    <div class="stat"><div class="num c-warn" id="stPending">-</div><div class="lbl">Chưa về kho</div></div>
+  </div>
+
+  <div class="card">
+    <button id="btnCam" class="btn btn-blue btn-full" onclick="toggleCamera()">📷 Bật Camera Quét Mã Vạch</button>
+    <div id="reader"></div>
+
+    <div class="row" style="margin-top:10px">
+      <input id="inpQuery" type="text" placeholder="Quét hoặc gõ 4 số cuối Mã đơn / Vận đơn / Nick..." onkeydown="if(event.key==='Enter') doLookup()" />
+      <button class="btn btn-blue" onclick="doLookup()">Tìm</button>
+    </div>
+
+    <div style="margin-top:8px">
+      <input id="inpStaff" type="text" placeholder="Tên nhân viên quét (tự nhớ trên máy)" onchange="localStorage.setItem('xs_staff', this.value)" style="font-size:13px;padding:8px 10px" />
+    </div>
+  </div>
+
+  <div id="resultArea"></div>
+
+  <div class="card">
+    <div style="font-weight:700;margin-bottom:6px;font-size:14px">🕒 Vừa quét gần đây</div>
+    <div id="recentList" class="muted">Đang tải...</div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // Có thể điền sẵn link Apps Script /exec vào đây để mọi điện thoại tự kết nối không cần dán tay:
+    const DEFAULT_API_URL = "";
+
+    let html5Qr = null;
+    let camActive = false;
+    let lastScanCode = "";
+    let lastScanTime = 0;
+    let deferredPrompt = null;
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById("btnInstall").style.display = "flex";
+    });
+
+    function installPwa() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        deferredPrompt = null;
+        document.getElementById("btnInstall").style.display = "none";
+      });
+    }
+
+    function getApiUrl() {
+      return (localStorage.getItem("xs_api_url") || DEFAULT_API_URL || "").trim();
+    }
+
+    function toggleSettings() {
+      const box = document.getElementById("settingsBox");
+      box.style.display = box.style.display === "block" ? "none" : "block";
+      document.getElementById("inpApiUrl").value = getApiUrl();
+    }
+
+    function saveApiUrl() {
+      const url = document.getElementById("inpApiUrl").value.trim();
+      if (!url.includes("script.google.com") || !url.endsWith("/exec")) {
+        showToast("Link phải có dạng https://script.google.com/macros/s/.../exec", true);
+        return;
+      }
+      localStorage.setItem("xs_api_url", url);
+      document.getElementById("settingsBox").style.display = "none";
+      showToast("✅ Đã lưu link kết nối!", false);
+      refreshStats();
+    }
+
+    window.onload = function() {
+      document.getElementById("inpStaff").value = localStorage.getItem("xs_staff") || "";
+      if (!getApiUrl()) {
+        document.getElementById("settingsBox").style.display = "block";
+        document.getElementById("recentList").innerHTML = "<div class='muted'>Hãy dán đường link Google Apps Script (/exec) ở ô Cấu hình phía trên để kết nối.</div>";
+      } else {
+        refreshStats();
+      }
+    };
+
+    function showToast(msg, isError) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.style.background = isError ? "#ef4444" : "#10b981";
+      t.style.color = isError ? "#fff" : "#052e16";
+      t.style.display = "block";
+      setTimeout(() => { t.style.display = "none"; }, 3000);
+    }
+
+    function beep() {
+      try {
+        if (navigator.vibrate) navigator.vibrate(80);
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(920, ctx.currentTime);
+        osc.connect(ctx.destination);
+        osc.start();
+        setTimeout(() => { osc.stop(); ctx.close(); }, 110);
+      } catch (e) {}
+    }
+
+    async function refreshStats() {
+      const api = getApiUrl();
+      if (!api) return;
+      try {
+        const resp = await fetch(api + "?action=stats");
+        const data = await resp.json();
+        document.getElementById("stTotal").textContent = data.totalReturns ?? "-";
+        document.getElementById("stScanned").textContent = data.scannedCount ?? "-";
+        document.getElementById("stPending").textContent = data.pendingCount ?? "-";
+        const box = document.getElementById("recentList");
+        if (!data.recentScans || data.recentScans.length === 0) {
+          box.innerHTML = "<div class='muted'>Chưa có lượt quét nào.</div>";
+          return;
+        }
+        box.innerHTML = data.recentScans.map(s => `
+          <div class="recent-item">
+            <div><b>${s.ma_don_hang}</b> — <span class="badge b-done">${s.tinh_trang}</span></div>
+            <div class="muted">${s.thoi_gian_quet}${s.nguoi_quet ? " • " + s.nguoi_quet : ""}${s.ghi_chu ? " • " + s.ghi_chu : ""}</div>
+          </div>
+        `).join("");
+      } catch (err) {
+        showToast("Lỗi kết nối API: " + err.message, true);
+      }
+    }
+
+    function toggleCamera() {
+      const el = document.getElementById("reader");
+      const btn = document.getElementById("btnCam");
+      if (camActive && html5Qr) {
+        html5Qr.stop().then(() => {
+          camActive = false;
+          el.style.display = "none";
+          btn.textContent = "📷 Bật Camera Quét Mã Vạch";
+          btn.className = "btn btn-blue btn-full";
+        });
+        return;
+      }
+      el.style.display = "block";
+      btn.textContent = "⏹️ Tắt Camera";
+      btn.className = "btn btn-red btn-full";
+      html5Qr = new Html5Qrcode("reader");
+      html5Qr.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 260, height: 140 } },
+        (decodedText) => {
+          const now = Date.now();
+          if (decodedText === lastScanCode && now - lastScanTime < 2500) return;
+          lastScanCode = decodedText;
+          lastScanTime = now;
+          beep();
+          document.getElementById("inpQuery").value = decodedText.trim();
+          doLookup();
+        },
+        () => {}
+      ).then(() => {
+        camActive = true;
+      }).catch(err => {
+        showToast("Không mở được camera: " + err, true);
+        el.style.display = "none";
+        btn.textContent = "📷 Bật Camera Quét Mã Vạch";
+        btn.className = "btn btn-blue btn-full";
+      });
+    }
+
+    async function doLookup() {
+      const api = getApiUrl();
+      if (!api) { toggleSettings(); return; }
+      const q = document.getElementById("inpQuery").value.trim();
+      if (!q) return;
+      const area = document.getElementById("resultArea");
+      area.innerHTML = `<div class="card muted">🔍 Đang tra cứu mã <b>${q}</b>...</div>`;
+      try {
+        const resp = await fetch(api + "?action=lookup&q=" + encodeURIComponent(q));
+        const res = await resp.json();
+        renderResults(res);
+      } catch (err) {
+        area.innerHTML = `<div class="card" style="color:#fca5a5">❌ Lỗi kết nối: ${err.message}</div>`;
+      }
+    }
+
+    function renderResults(res) {
+      const area = document.getElementById("resultArea");
+      if (!res.found) {
+        area.innerHTML = `<div class="card" style="border-color:#ef4444;color:#fca5a5">❌ ${res.message}</div>`;
+        return;
+      }
+      area.innerHTML = res.matches.map((o, idx) => {
+        const badgeCls = o.loai_hoan.includes("Trả hàng") ? "b-ret" : "b-fail";
+        const scannedBanner = o.scanned
+          ? `<div style="margin:6px 0;padding:8px;border-radius:8px;background:#064e3b;color:#a7f3d0;font-size:13px">✅ ĐÃ QUÉT LÚC ${o.scanned.thoi_gian_quet} (${o.scanned.tinh_trang})</div>`
+          : "";
+        const itemsHtml = o.items.map(it => `<li>${it}</li>`).join("");
+        const prodSummary = o.items.join(" | ").replace(/"/g, "&quot;");
+        return `
+          <div class="card" style="border-color:#38bdf8">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
+              <b style="font-size:15px;color:#38bdf8">${o.ma_don_hang}</b>
+              <span class="badge ${badgeCls}">${o.loai_hoan}</span>
+            </div>
+            <div class="muted" style="margin-top:4px">
+              Vận đơn: <b>${o.ma_van_don || "-"}</b> • Đặt: ${o.ngay_dat}<br/>
+              Khách: <b>${o.nguoi_mua || "-"}</b>
+            </div>
+            ${scannedBanner}
+            <ul class="item-list">${itemsHtml}</ul>
+            <input id="note_${idx}" type="text" placeholder="Ghi chú nếu thiếu/rách/tráo hàng (không bắt buộc)..." style="font-size:13px;padding:8px;margin-bottom:8px" />
+            <div class="row">
+              <button class="btn btn-green" style="flex:1" onclick='submitScan("${o.ma_don_hang}", "${o.ma_van_don}", "Nguyên vẹn", "note_${idx}", "${prodSummary}")'>✅ Nguyên vẹn</button>
+              <button class="btn btn-amber" style="flex:1" onclick='submitScan("${o.ma_don_hang}", "${o.ma_van_don}", "Thiếu hàng", "note_${idx}", "${prodSummary}")'>⚠️ Thiếu</button>
+              <button class="btn btn-red" style="flex:1" onclick='submitScan("${o.ma_don_hang}", "${o.ma_van_don}", "Hư hỏng / Tráo hàng", "note_${idx}", "${prodSummary}")'>🔴 Hư/Tráo</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function submitScan(oid, track, status, noteId, prodSummary) {
+      const api = getApiUrl();
+      if (!api) return;
+      const note = document.getElementById(noteId) ? document.getElementById(noteId).value.trim() : "";
+      const staff = document.getElementById("inpStaff").value.trim();
+      showToast("⏳ Đang lưu lên Google Sheets...", false);
+      try {
+        const resp = await fetch(api, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            ma_don_hang: oid,
+            ma_van_don: track,
+            tinh_trang: status,
+            ghi_chu: note,
+            nguoi_quet: staff,
+            san_pham: prodSummary
+          })
+        });
+        const res = await resp.json();
+        if (res.ok) {
+          beep();
+          showToast("✅ " + res.message, false);
+          document.getElementById("inpQuery").value = "";
+          document.getElementById("resultArea").innerHTML = "";
+          refreshStats();
+        } else {
+          showToast("❌ " + (res.message || "Không lưu được"), true);
+        }
+      } catch (err) {
+        showToast("❌ Lỗi lưu: " + err.message, true);
+      }
+    }
+  </script>
+</body>
+</html>
